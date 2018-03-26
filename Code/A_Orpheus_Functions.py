@@ -16,6 +16,7 @@ import winsound
 import time
 import re
 import random
+import inspect
 
 # =============================================================================
 # Class Definitions
@@ -58,6 +59,7 @@ class Note:
         """
         winsound.Beep(int(self.hertz), int(duration))
 
+
 class Measure:
     """
     The Measure Class, the building block of more complex musical structures
@@ -68,7 +70,7 @@ class Measure:
         nbeat: how many "beats" are in the measure (say, 32 for 4/4 time with 16th notes)
         """
         self.bpm = bpm
-        self.measure = measure
+        self.measure = measure # A list of notes
         self.nbeat = nbeat
         self.nnotes= len(measure)
         self.note_duration = (60000/self.bpm) * (self.nbeat/self.nnotes)
@@ -86,6 +88,8 @@ class Measure:
             
             if note == "rest":
                 #"rest" types in the list are interpreted as rests
+                
+                #Rest for a duration given by the number of proceeding continuations
                 continuations = 1
                 next_note_i = i + 1
                     
@@ -115,13 +119,10 @@ class Measure:
                 
                 #print("note: " + str(time.time() - starttime)) #Display Note Time
             
-                
-
-
+            
 # =============================================================================
 # Functions
 # =============================================================================
-
 
 
 def convert_notes(note_string_list, octaves = "rest"):
@@ -142,6 +143,7 @@ def convert_notes(note_string_list, octaves = "rest"):
         
     return note_list
     
+
 def random_select(p_list):
     """
     Randomly select an index from an iterable list of probabilities
@@ -186,11 +188,72 @@ def next_note(key, p_continue, p_rest, p_notes):
     
     else:
         return key[random_select(p_notes)]
+
+
+def selection_prob(prob_list):
+    """
+    Given a list of probabilities "prob_list" that denotes the probability someone likes a given piece,
+    compute the probabilities of selection
+    """
+    S = sum(prob_list)
     
+    selection_probs = []
+    for i in range(0, len(prob_list)):
+        selection_probs.append(prob_list(i)/S)
+        
+    return selection_probs
+
+
+def like_dislike(outfilename, music_function):
+    """
+    Plays a piece, asks the user if they like or dislike it, then appends the piece and
+    respose to a .csv file.
+    inputs:
+        outfilename, the name of the csv file a string
+        music_function, a function handle that plays music and returns the measure of music being played
+    outputs:
+        none, writes to a file
+    """
     
+    measure = music_function().measure
+    
+    critical_review = input("Did you like it <y/n>? ")
+    
+    if critical_review.lower() == "y":
+        response = 1
+    elif critical_review.lower() == "n":
+        response = 0
+    else:
+        print("Can you read? Answer y or n.")
+        raise ValueError
+            
+        
+    with open(outfilename, mode = 'a', encoding = "utf_8") as outfile:
+        outfile.write(str(response) + ",")
+        for beat in measure:
+            if inspect.isinstance(beat, Note):
+                outfile.write(beat.pitch + "-" + str(beat.octave) + ",")
+            elif type(beat) == str:
+                outfile.write(beat + ",")
+            else:
+                print("Unknown beat value")
+                raise ValueError
+        outfile.write("\n")
+                
 
-
-
+def initialize_datafile(outfilename, num_beats):
+    """
+    Intialize the datafile to store training data on a particular measure
+    inputs:
+        outfilename, a string
+    outputs:
+        none, writes to a file
+    """
+    with open(outfilename, mode = 'w', encoding = "utf_8") as outfile:
+        outfile.write("listener_response" + ",")
+        for i in range(0,num_beats):
+            outfile.write("beat" + str(i) + ",")
+        outfile.write("\n")
 
 
 
@@ -221,10 +284,10 @@ p_list = (.125, .125, .125, .125, .125, .125, .125, .125)
 #print(avg)
 #
 random_measure_list = [Note("A",4)]
-scale = convert_notes(["A", "B", "C", "D", "E", "F", "G", "A"], [4,4,4,4,4,4,4,5])
+scale = convert_notes(["A", "B", "C#", "D", "E", "F#", "G#", "A"], [4,4,4,4,4,4,4,5])
 
 for i in range(0, 7):
-    new_note = next_note(scale, .2, .2, p_list)
+    new_note = next_note(scale, .125, .125, p_list)
     #print(new_note)
     random_measure_list.append(new_note)
     
