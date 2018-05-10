@@ -16,7 +16,6 @@ import winsound
 import time
 import re
 import random
-import inspect
 
 # =============================================================================
 # Class Definitions
@@ -165,7 +164,7 @@ def random_select(p_list):
     return len(p_list)-1
         
 
-def next_note(key, p_continue, p_rest, p_notes):
+def next_note_tree(key, p_continue, p_rest, p_notes):
     """
     This function runs through the decision tree with specified probabilities
     Inputs:
@@ -188,6 +187,32 @@ def next_note(key, p_continue, p_rest, p_notes):
     
     else:
         return key[random_select(p_notes)]
+
+
+def next_note_lin(key, p_continue, p_rest, p_notes):
+    """
+    This function runs through the decision tree with specified probabilities
+    Inputs:
+        key, the possible notes that can be selected
+        p_continue, float in [0,1] the probability of continuing
+        p_rest, the probability of resting
+        p_notes, a vector of probabilities that is of dim = len(key)
+    Outputs:
+        A note from key
+    """
+    
+    #Randomly returns the next beat in the sequence based on prespecified probabilities
+    #According to the decision tree
+    
+    p_beat_options = p_notes
+    p_beat_options.append(p_continue)
+    p_beat_options.append(p_rest)
+    
+    beat_options = key
+    beat_options.append("cont")
+    beat_options.append("rest")
+    
+    return beat_options[random_select(p_beat_options)]
 
 
 def selection_prob(prob_list):
@@ -230,16 +255,25 @@ def like_dislike(outfilename, music_function):
         
     with open(outfilename, mode = 'a', encoding = "utf_8") as outfile:
         outfile.write(str(response) + ",")
-        for beat in measure:
-            if inspect.isinstance(beat, Note):
-                outfile.write(beat.pitch + "-" + str(beat.octave) + ",")
-            elif type(beat) == str:
-                outfile.write(beat + ",")
-            else:
-                print("Unknown beat value")
-                raise ValueError
+        for index, beat in enumerate(measure):
+            if index < len(measure)-1:
+                if isinstance(beat, Note):
+                    outfile.write(beat.pitch + "-" + str(beat.octave) + ",")
+                elif type(beat) == str:
+                    outfile.write(beat + ",")
+                else:
+                    print("Unknown beat value")
+                    raise ValueError
+            elif index == len(measure)-1:
+                if isinstance(beat, Note):
+                    outfile.write(beat.pitch + "-" + str(beat.octave))
+                elif type(beat) == str:
+                    outfile.write(beat)
+                else:
+                    print("Unknown beat value")
+                    raise ValueError
         outfile.write("\n")
-                
+
 
 def initialize_datafile(outfilename, num_beats):
     """
@@ -254,47 +288,91 @@ def initialize_datafile(outfilename, num_beats):
         for i in range(0,num_beats):
             outfile.write("beat" + str(i) + ",")
         outfile.write("\n")
+        
 
+
+def expand_datafile(outfilename, infilename, mes_len):
+    """
+    Expand the csv file of the listener_respond, note1, note2,...
+    into all measures of length 'mes_len'
+    inputs:
+        infilename, a string the input filename
+        outfilename, a string the output filename 
+        mes_len, and integer how far back we are looking
+    outputs:
+        None
+    """
+    #Loop over every line in the input file
+    with open(infilename, mode = "r", encoding = "utf_8") as infile:
+        for count, line in enumerate(infile):
+            
+            num_notes = len(line.strip().split(",")) - 1 #The number of notes in the measure
+            data = line.strip().split(",")
+            
+            #If it is the first line, write the first mes_len + 1 entries
+            if count == 0:
+                with open(outfilename, mode = "w", encoding = "utf_8") as outfile:
+                    for i in range(0,mes_len + 1):
+                        outfile.write(data[i])
+                        if i < mes_len:
+                            outfile.write(",")
+                        else:
+                            outfile.write("\n")
+            
+            #The actual data
+            else:
+                with open(outfilename, mode = "a", encoding = "utf_8") as outfile:
+                    for j in range(1, num_notes-mes_len + 2):
+                        #If we have empty data, continue
+                        if data[j] == "cont":
+                            continue
+                        
+                        outfile.write(data[0] + ",")
+                        for i in range(j, mes_len + j):
+                            outfile.write(data[i])
+                            if i < mes_len + j-1:
+                                outfile.write(",")
+                        outfile.write("\n")
+
+
+def Amajor_8beat():
+    """
+    This function plays an 8 beat A major scale.
+    Inputs:
+        None
+    Outputs:
+        A instance of the measure class
+    """
+    A_major = ["A", "B", "C#", "D", "E", "F#", "G#", "A"]
+    p_list = [.125, .125, .125, .125, .125, .125, .125, .125]
+    random_measure_list = [Note(A_major[random_select(p_list)],4)]
+    scale = convert_notes(A_major, [4,4,4,4,4,4,4,5])
+    
+    for i in range(0, 7):
+        new_note = next_note_tree(scale, .1, .25, p_list)
+        random_measure_list.append(new_note)
+        
+    random_measure = Measure(145, random_measure_list, len(random_measure_list))
+    
+    
+    starttime = time.time()
+    random_measure.win_play()
+    
+    print("Measure Duration: " + str(time.time() - starttime))
+    return random_measure
+
+
+def Amajor_8beat_adddata():
+    """
+    Add a datapoint to the Amajor_8beat file.
+    """
+    
+    like_dislike("../input/A_Amajor-8beat-winsound.csv",  Amajor_8beat)
 
 
 # =============================================================================
 # Testing
 # =============================================================================
 
-
-#major_scale = convert_notes(["A", "B", "C#", "D", "E", "F#", "G#", "A"], [4, 4, 4, 4, 4, 4, 4, 5] )
-#maj_scale_mes = Measure(150, major_scale, 8)
-#maj_scale_mes.win_play()
-
-#smoke_on_the_water = convert_notes(["E", "rest", "G", "rest", "A", "E", "rest", "G", "A#", "A", "E", "rest" ,"G", "rest", "A", "G", "E"],
-#                                    [3,"rest",3,"rest",4,3,"rest",3,4,4,3,"rest",3,"rest",4,3,3])
-#smoke_mes = Measure(200, smoke_on_the_water, len(smoke_on_the_water))
-#smoke_mes.win_play()
-
-#beat_test = convert_notes(["A", "A", "rest", "A", "A", "rest", "A", "A", "C"])
-#beat_test_mes = Measure(200, beat_test, len(beat_test))
-#beat_test_mes.win_play()
-
-p_list = (.125, .125, .125, .125, .125, .125, .125, .125)
-#avg = 0
-#for i in range(1,100000):
-#    #print(random_select(p_list))
-#    avg += random_select(p_list)/100000
-#    
-#print(avg)
-#
-random_measure_list = [Note("A",4)]
-scale = convert_notes(["A", "B", "C#", "D", "E", "F#", "G#", "A"], [4,4,4,4,4,4,4,5])
-
-for i in range(0, 7):
-    new_note = next_note(scale, .125, .125, p_list)
-    #print(new_note)
-    random_measure_list.append(new_note)
-    
-random_measure = Measure(145, random_measure_list, len(random_measure_list))
-
-
-starttime = time.time()
-random_measure.win_play()
-
-print("Measure Duration: " + str(time.time() - starttime))
+Amajor_8beat_adddata()
+expand_datafile("../input/A_Amajor-8beat-winsound_expanded.csv","../input/A_Amajor-8beat-winsound.csv", 4)
