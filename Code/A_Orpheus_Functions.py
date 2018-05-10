@@ -16,6 +16,7 @@ import winsound
 import time
 import re
 import random
+import pandas as pd
 
 # =============================================================================
 # Class Definitions
@@ -333,7 +334,24 @@ def expand_datafile(outfilename, infilename, mes_len):
                             if i < mes_len + j-1:
                                 outfile.write(",")
                         outfile.write("\n")
-
+                        
+def create_indicators(infilename, outfilename):
+    """
+    This function creates a series of indicator variables for each column beat value,
+    outputs a high dimensional csv file.
+    inputs:
+        filename, a string the filename to read in
+        outfilename, a string, the file to output to
+    outputs:
+        none, constructs a csv file under outfilename
+    """
+    
+    input_df = pd.read_csv(infilename) # read the data input
+    
+    input_col_names = list(input_df.columns.values)
+    output_df = pd.get_dummies(input_df, columns = input_col_names[1:])
+    
+    output_df.to_csv(outfilename, index = False)
 
 def Amajor_8beat():
     """
@@ -368,11 +386,12 @@ def Amajor_8beat_adddata():
     """
     
     like_dislike("../input/A_Amajor-8beat-winsound.csv",  Amajor_8beat)
-
+    
 
 # =============================================================================
 # Testing
 # =============================================================================
 
-Amajor_8beat_adddata()
-expand_datafile("../input/A_Amajor-8beat-winsound_expanded.csv","../input/A_Amajor-8beat-winsound.csv", 4)
+#Amajor_8beat_adddata()
+#expand_datafile("../input/A_Amajor-8beat-winsound_expanded.csv","../input/A_Amajor-8beat-winsound.csv", 4)
+create_indicators("../input/A_Amajor-8beat-winsound_expanded.csv", "../input/A_Amajor-8beat-winsound_indicators.csv")
