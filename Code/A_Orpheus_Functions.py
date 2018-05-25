@@ -14,23 +14,14 @@ This program contains the necessacary functions for the Orpheus Program
 
 import winsound
 import time
-import re
 import random
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
+
 
 # =============================================================================
 # Class Definitions
 # =============================================================================
-
-#class Beat:
-#    """
-#    The beat class, the basic box to be filled with notes or rests, NOT CURRENTLY USED
-#    """
-#    def __init__(self, note):
-#        """
-#        note: A member of the note class, or "rest" which indicates a rest
-#        """
-#        self.note = note
 
 class Note:
     """
@@ -292,7 +283,7 @@ def initialize_datafile(outfilename, num_beats):
         
 
 
-def expand_datafile(outfilename, infilename, mes_len):
+def expand_datafile(infilename, outfilename, mes_len):
     """
     Expand the csv file of the listener_respond, note1, note2,...
     into all measures of length 'mes_len'
@@ -334,7 +325,54 @@ def expand_datafile(outfilename, infilename, mes_len):
                             if i < mes_len + j-1:
                                 outfile.write(",")
                         outfile.write("\n")
-                        
+
+def powerset(s):
+    """
+    This function takes a set object S and returns its powerset Ps.
+    Inputs:
+        s, a set
+    Outputs:
+        Ps, a set, the powerset of s
+    """
+    result = [[]]
+    for elem in s:
+        result.extend([x + [elem] for x in result])
+    return result
+
+def create_interactions(infilename, outfilename, order):
+    """
+    This function creates a series of interaction variables
+    inputs:
+        infilename, a string, the name of the file containing the variables to be interacted
+        outfilename, a stirng, the name of the file to output interactions to
+        order, an integer, the maximum allowed order of interactions
+    outputs:
+        none, writes to a csv file
+    """
+    with open(infilename, mode = 'r', encoding = 'utf_8') as infile:
+        with open(outfilename, mode = 'w', encoding = 'utf_8') as outfile:
+            
+            for index, row in enumerate(infile):
+                row_data = row.strip().split(',')
+                
+                if index == 0:
+                    header = row_data
+                    interaction_orders = set(range(1, len(header))) # The different desired orders of interacitons
+                    interactions = powerset(interaction_orders)
+                
+                outfile.write(row_data[0] + ',')
+                
+                for sub_num, subset in enumerate(interactions):
+                    if subset == []:
+                        continue
+                    if len(subset) > order:
+                        continue
+                    for elem in subset:
+                        outfile.write(row_data[elem])
+                    if sub_num < len(interactions) - 1:
+                        outfile.write(',')
+                outfile.write('\n')    
+    
 def create_indicators(infilename, outfilename):
     """
     This function creates a series of indicator variables for each column beat value,
@@ -352,6 +390,30 @@ def create_indicators(infilename, outfilename):
     output_df = pd.get_dummies(input_df, columns = input_col_names[1:])
     
     output_df.to_csv(outfilename, index = False)
+
+def logit_lasso(infilename, reg_par = 1):
+    """
+    This function takes in a file containing csv data with dep var in the first column
+    and potential covariates in the others, fits a logistic regression with a L1
+    penalty to it, and returns that model.
+    inputs:
+        infilename, a string the name of the file containing the data
+        reg_par, a float, the regularization penalty parameter for the logit. Defaults to 1
+    outputs:
+        A trained logit model
+    """
+    
+    
+    input_df = pd.read_csv(infilename) 
+    
+    y = input_df.iloc[:,1]
+    X = input_df.iloc[:,2:]
+    
+    model = LogisticRegression(penalty = "l1", solver = "liblinear", C = reg_par)
+
+    fitted_model = model.fit(X,y)
+    
+    return fitted_model
 
 def Amajor_8beat():
     """
@@ -379,19 +441,19 @@ def Amajor_8beat():
     print("Measure Duration: " + str(time.time() - starttime))
     return random_measure
 
-
 def Amajor_8beat_adddata():
     """
     Add a datapoint to the Amajor_8beat file.
     """
     
     like_dislike("../input/A_Amajor-8beat-winsound.csv",  Amajor_8beat)
+    expand_datafile("../input/A_Amajor-8beat-winsound.csv", "../input/A_Amajor-8beat-winsound_expanded.csv", 4)
+    create_interactions("../input/A_Amajor-8beat-winsound_expanded.csv", "../input/A_Amajor-8beat-winsound-interactions.csv", 3)
+    create_indicators("../input/A_Amajor-8beat-winsound-interactions.csv", "../input/A_Amajor-8beat-winsound_indicators.csv")
     
-
 # =============================================================================
 # Testing
 # =============================================================================
 
-#Amajor_8beat_adddata()
-#expand_datafile("../input/A_Amajor-8beat-winsound_expanded.csv","../input/A_Amajor-8beat-winsound.csv", 4)
-create_indicators("../input/A_Amajor-8beat-winsound_expanded.csv", "../input/A_Amajor-8beat-winsound_indicators.csv")
+Amajor_8beat_adddata()
+fitted_model = logit_lasso("../input/A_Amajor-8beat-winsound_indicators.csv",2)
