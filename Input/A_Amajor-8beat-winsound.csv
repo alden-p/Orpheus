@@ -63,3 +63,10 @@ listener_response,beat0,beat1,beat2,beat3,beat4,beat5,beat6,beat7
 1,B-4,rest,C#-4,G#-4,D-4,A-5,B-4,G#-4
 1,B-4,E-4,A-5,E-4,cont,G#-4,F#-4,C#-4
 1,F#-4,F#-4,E-4,rest,E-4,D-4,C#-4,E-4
+0,G#-4,D-4,F#-4,rest,A-5,B-4,B-4,rest
+1,A-4,G#-4,E-4,B-4,F#-4,F#-4,B-4,E-4
+0,F#-4,A-4,A-4,C#-4,D-4,E-4,B-4,D-4
+1,G#-4,A-5,E-4,D-4,C#-4,B-4,B-4,A-4
+1,C#-4,C#-4,F#-4,G#-4,A-5,D-4,C#-4,B-4
+1,G#-4,G#-4,D-4,A-5,A-4,E-4,C#-4,cont
+1,A-4,E-4,C#-4,rest,G#-4,A-4,cont,cont

@@ -16,6 +16,7 @@ import winsound
 import time
 import random
 import pandas as pd
+import re
 from sklearn.linear_model import LogisticRegression
 
 
@@ -49,7 +50,6 @@ class Note:
         Play the note through the windows system sound library for a specified duration
         """
         winsound.Beep(int(self.hertz), int(duration))
-
 
 class Measure:
     """
@@ -109,8 +109,7 @@ class Measure:
                 note.win_play(self.note_duration*continuations)
                 
                 #print("note: " + str(time.time() - starttime)) #Display Note Time
-            
-            
+                   
 # =============================================================================
 # Functions
 # =============================================================================
@@ -415,6 +414,44 @@ def logit_lasso(infilename, reg_par = 1):
     
     return fitted_model
 
+def create_X(note_string_list, datafilename):
+    """
+    This function takes a sequence of notes and returns a vector (list) of covariate
+    indicators for that list.
+    inputs:
+        note_string_list, A list of strings indicating the sequence of notes to be played
+        datafilename, a string, the name of the file containing the information on the covariates
+    outputs:
+        a list of indicators (1,0)s
+    """
+    
+    X = []
+    
+    #Read in the header of the datafile and take everything but listerner respose into a list
+    with open(datafilename, mode = 'r', encoding = 'utf_8') as infile:
+        columnnames = infile.readline().strip().split(',')[1:]
+    
+    #Loop over columnnames, they should be of the form beat0beat2_A#-4C-5
+    for col in columnnames:
+        
+        noteseq = '' #Intialize empty sequence of notes
+        
+        #Split the format into the beatorder we care about, and what the corresponding
+        #Note order should be for indicator = 1
+        collist = col.split('_')
+        beatorder = re.sub('[^0-9]','', collist[0]) #Construct a string defining the order
+        noteorder = collist[1]
+        
+        #Check if the note order in the list equals the note order we care about.
+        for i in beatorder:
+            noteseq += note_string_list[int(i)]
+        if noteorder == noteseq:
+            X.append(1)
+        else:
+            X.append(0)
+            
+    return X
+        
 def Amajor_8beat():
     """
     This function plays an 8 beat A major scale.
@@ -424,12 +461,12 @@ def Amajor_8beat():
         A instance of the measure class
     """
     A_major = ["A", "B", "C#", "D", "E", "F#", "G#", "A"]
-    p_list = [.125, .125, .125, .125, .125, .125, .125, .125]
+    p_list = [.08, .08, .08, .08, .08, .08, .08, .08]
     random_measure_list = [Note(A_major[random_select(p_list)],4)]
     scale = convert_notes(A_major, [4,4,4,4,4,4,4,5])
     
     for i in range(0, 7):
-        new_note = next_note_tree(scale, .1, .25, p_list)
+        new_note = next_note_lin(scale, .18, .18, p_list)
         random_measure_list.append(new_note)
         
     random_measure = Measure(145, random_measure_list, len(random_measure_list))
@@ -455,5 +492,8 @@ def Amajor_8beat_adddata():
 # Testing
 # =============================================================================
 
-Amajor_8beat_adddata()
-fitted_model = logit_lasso("../input/A_Amajor-8beat-winsound_indicators.csv",2)
+#Amajor_8beat_adddata()
+#fitted_model = logit_lasso("../input/A_Amajor-8beat-winsound_indicators.csv",2)
+
+
+#create_X(["A-4", "B-4", "C#-4", "D-4"], "../input/A_Amajor-8beat-winsound_indicators.csv")
