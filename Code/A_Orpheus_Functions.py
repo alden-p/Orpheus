@@ -17,8 +17,9 @@ import time
 import random
 import pandas as pd
 import re
+import numpy as np
 from sklearn.linear_model import LogisticRegression
-
+from sklearn.linear_model import LogisticRegressionCV
 
 # =============================================================================
 # Class Definitions
@@ -115,21 +116,17 @@ class Measure:
 # =============================================================================
 
 
-def convert_notes(note_string_list, octaves = "rest"):
+def convert_notes(note_string_list):
     """
     Convert a list of strings to the note class of a specified octave.
     """
     note_list = []
-    
-    #If octaves are not specified assume all octaves to be the fourth octave
-    if octaves == "rest":
-        octaves =  [4]*len(note_string_list)
-        
+            
     for i in range(len(note_string_list)):
-        if note_string_list[i] != "rest":
-            note_list.append(Note(note_string_list[i], octaves[i])) #Construct a list of note objects
+        if note_string_list[i] != "rest" and note_string_list[i] != "cont":
+            note_list.append(Note(note_string_list[i].split('-')[0], int(note_string_list[i].split('-')[1]))) #Construct a list of note objects
         else:
-            note_list.append("rest")
+            note_list.append(note_string_list[i])
         
     return note_list
     
@@ -153,16 +150,13 @@ def random_select(p_list):
         if cum_prob >= target_num:
             return i
     return len(p_list)-1
-        
 
-def next_note_tree(key, p_continue, p_rest, p_notes):
+def next_note_lin(notes, p_notes):
     """
     This function runs through the decision tree with specified probabilities
     Inputs:
-        key, the possible notes that can be selected
-        p_continue, float in [0,1] the probability of continuing
-        p_rest, the probability of resting
-        p_notes, a vector of probabilities that is of dim = len(key)
+        notes, a list of notes must have [..., cont, rest] at the end
+        p_notes, a vector of probabilities correspond to each note
     Outputs:
         A note from key
     """
@@ -170,40 +164,7 @@ def next_note_tree(key, p_continue, p_rest, p_notes):
     #Randomly returns the next beat in the sequence based on prespecified probabilities
     #According to the decision tree
     
-    if random_select( (1-p_continue, p_continue) ) == 1:
-        return "cont"
-    
-    elif random_select( (1-p_rest, p_rest) ) == 1:
-        return "rest"
-    
-    else:
-        return key[random_select(p_notes)]
-
-
-def next_note_lin(key, p_continue, p_rest, p_notes):
-    """
-    This function runs through the decision tree with specified probabilities
-    Inputs:
-        key, the possible notes that can be selected
-        p_continue, float in [0,1] the probability of continuing
-        p_rest, the probability of resting
-        p_notes, a vector of probabilities that is of dim = len(key)
-    Outputs:
-        A note from key
-    """
-    
-    #Randomly returns the next beat in the sequence based on prespecified probabilities
-    #According to the decision tree
-    
-    p_beat_options = p_notes
-    p_beat_options.append(p_continue)
-    p_beat_options.append(p_rest)
-    
-    beat_options = key
-    beat_options.append("cont")
-    beat_options.append("rest")
-    
-    return beat_options[random_select(p_beat_options)]
+    return notes[random_select(p_notes)]
 
 
 def selection_prob(prob_list):
@@ -215,7 +176,7 @@ def selection_prob(prob_list):
     
     selection_probs = []
     for i in range(0, len(prob_list)):
-        selection_probs.append(prob_list(i)/S)
+        selection_probs.append(prob_list[i]/S)
         
     return selection_probs
 
@@ -405,10 +366,11 @@ def logit_lasso(infilename, reg_par = 1):
     
     input_df = pd.read_csv(infilename) 
     
-    y = input_df.iloc[:,1]
-    X = input_df.iloc[:,2:]
+    y = input_df.iloc[:,0]
+    X = input_df.iloc[:,1:]
     
-    model = LogisticRegression(penalty = "l1", solver = "liblinear", C = reg_par)
+    model = LogisticRegression(penalty = "l1", solver = "liblinear", C = reg_par, multi_class = "ovr")
+#    model = LogisticRegressionCV(penalty = "l1", solver = "liblinear", multi_class = "ovr", Cs = reg_par)
 
     fitted_model = model.fit(X,y)
     
@@ -449,9 +411,35 @@ def create_X(note_string_list, datafilename):
             X.append(1)
         else:
             X.append(0)
-            
-    return X
-        
+    return np.array(X).reshape(1,-1)
+
+def construc_prob(history, window, note_set, model, datafilename):
+    """
+    This function constructs the proabilities of seeing each next note
+    Inputs:
+        history, A list of strings, the note history in chronological order
+        window, and integer how far back we are looking
+        note_set, the set of notes to be considered
+        model, the model used to construct probabilities
+        datafilename,  a string, the name of the file containing the information to convert strings of notes to interaction dummies
+    Outputs:
+        A list of probabilities of len(note_set)
+    """
+    
+    recent_history = history[len(history)-window + 1:len(history)]
+    
+    like_prob = [] # Initialize a empty list of probabilities of liking a certain sequence
+    
+    for note in note_set:
+        potential_hist = recent_history + [note]
+        X = create_X(potential_hist, datafilename)
+#        print(potential_hist)
+#        print(model(X))
+        like_prob.append(model(X))
+    
+    return selection_prob(like_prob)
+
+    
 def Amajor_8beat():
     """
     This function plays an 8 beat A major scale.
@@ -460,17 +448,53 @@ def Amajor_8beat():
     Outputs:
         A instance of the measure class
     """
-    A_major = ["A", "B", "C#", "D", "E", "F#", "G#", "A"]
+    #Intialize teh scale and probability list for the first 3 notes
+    A_major = ["A-4", "B-4", "C#-4", "D-4", "E-4", "F#-4", "G#-4", "A-5"]
+    note_set = A_major + ["cont", "rest"]
     p_list = [.08, .08, .08, .08, .08, .08, .08, .08]
-    random_measure_list = [Note(A_major[random_select(p_list)],4)]
-    scale = convert_notes(A_major, [4,4,4,4,4,4,4,5])
+    scale = convert_notes(note_set)
     
-    for i in range(0, 7):
-        new_note = next_note_lin(scale, .18, .18, p_list)
-        random_measure_list.append(new_note)
+    #Generate the first note, add it to the history and random measure
+    first_note = A_major[random_select(p_list)] #Initialize the first note 
+    history = [first_note]
+    random_measure_list = [Note(first_note.split("-")[0], int(first_note.split("-")[1]))]
+    
+    #Allow for the possibility of rests and continues now that the first note has been added
+    p_list.append(.18)
+    p_list.append(.18)
+    
+    #Generate the next 2 notes
+    for i in range(1, 3):
+        #randomly select the index, using that index add a new note to the scale
+        index = random_select(p_list) 
+        new_note = scale[index]
+        new_note_str = note_set[index]
         
-    random_measure = Measure(145, random_measure_list, len(random_measure_list))
+        #Add the new note to the random measure and the history
+        random_measure_list.append(new_note)
+        history.append(new_note_str)
+        
+    #Fit a logit model to predict probabilities
+    datafilename = "../input/A_Amajor-8beat-winsound_indicators.csv"
+    fitted_model = logit_lasso(datafilename,3)
+    model = lambda X: fitted_model.predict_proba(X)[0,1]
+    window = 4
     
+    #Intelligently generate the remainder of the measure
+    for i in range(3, 8):
+        #randomly select the index, using that index add a new note to the scale, where the probabilities are updated accodring to model
+        p_list = construc_prob(history, window, note_set, model, datafilename)
+        index = random_select(p_list) 
+        new_note = scale[index]
+        new_note_str = note_set[index]
+        
+        #Add the new note to the random measure and the history
+        random_measure_list.append(new_note)
+        history.append(new_note_str) 
+        
+    print(history)
+    
+    random_measure = Measure(145, random_measure_list, len(random_measure_list))
     
     starttime = time.time()
     random_measure.win_play()
@@ -492,8 +516,5 @@ def Amajor_8beat_adddata():
 # Testing
 # =============================================================================
 
-#Amajor_8beat_adddata()
-#fitted_model = logit_lasso("../input/A_Amajor-8beat-winsound_indicators.csv",2)
-
-
-#create_X(["A-4", "B-4", "C#-4", "D-4"], "../input/A_Amajor-8beat-winsound_indicators.csv")
+#Amajor_8beat()
+Amajor_8beat_adddata()
